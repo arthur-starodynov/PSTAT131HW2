@@ -1,0 +1,105 @@
+---
+title: "PSTAT131HW#2"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-04-06'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(tidymodels)
+abalone.data <- read.csv('C:/Users/arthu/Dropbox/My PC (DESKTOP-9BV8I37)/Desktop/abalone.csv.csv')
+set.seed(43)
+```
+1) 
+
+```{r}
+abalone.data$age <- abalone.data$rings +1.5
+ggplot(abalone.data, aes(x=age)) +
+  geom_histogram(bins=30) +
+  scale_x_continuous(breaks=seq(0, 30, 2)) +
+  geom_vline(aes(xintercept=mean(age)), col='green')
+```
+This is clearly a right skewed distrbution with finding out the the mean is around 12 with a standard deviation around 3
+
+2) 
+```{r} 
+p <- 0.7
+strats <- abalone.data$type
+
+rr <- split(1:length(strats), strats)
+idx <- sort(as.numeric(unlist(sapply(rr, function(x) sample(x, length(x) * p)))))
+
+train <- abalone.data[idx, ]
+test <- abalone.data[-idx, ]
+```
+
+3) 
+```{r}
+train <- train %>% na.omit()
+recipe_normal <- 
+  recipe(age ~ type + longest_shell + diameter + height + whole_weight + shucked_weight + viscera_weight + shell_weight, data = train) %>%
+  step_dummy(type, one_hot = F) %>%
+  step_interact(terms = ~starts_with('type'):shucked_weight)
+  step_interact(recipe_normal, terms = ~longest_shell:diameter)
+  step_interact(recipe_normal, terms = ~shucked_weight:shell_weight)
+  step_center(recipe_normal) %>% 
+  step_scale(recipe_normal)
+  
+```
+
+4)
+```{r}
+lm_model <- linear_reg() %>% 
+            set_engine('lm') %>% 
+            set_mode('regression')
+
+```
+
+5) 
+```{r}
+abalone_workflow <- workflow() %>% 
+                        add_model(lm_model) %>% 
+                        add_recipe(recipe_normal)
+```
+
+6) 
+Use your fit() object to predict the age of a hypothetical female abalone with longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, shucked_weight = 1, viscera_weight = 2, shell_weight = 1.
+
+```{r}
+abalone_fit <- abalone_workflow %>% 
+                   fit(train)
+predict.sample <- list(longest_shell = .5,
+                       diameter = .10,
+                       height = .3,
+                       whole_weight = 4,
+                       shucked_weight =1,
+                       viscera_weight = 2,
+                       shell_weight =1,
+                       type = 'F')
+predict.sample <- as.data.frame(predict.sample)
+predict(abalone_fit, predict.sample) %>% unlist() %>% unname()
+```
+7) 
+```{r}
+library(yardstick)
+multimetric = metric_set(rsq, rmse, mae)
+boundtestdata = bind_cols(predict(abalone_fit, train),
+                            train$age)
+colnames(boundtestdata) = c("Predicted Age", "True Age")
+multimetric(data=boundtestdata,
+             truth="True Age",
+             estimate="Predicted Age")
+```
+Looking at the values provided we can see that we get an R^2 value of 0.54 which represents that our model performs very poorly in having the response predicted by the predictor variables. 
+
+
+
+
+
+```
